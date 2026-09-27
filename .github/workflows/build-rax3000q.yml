@@ -1,28 +1,23 @@
 name: Build RAX3000Q
-
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write        # 允许创建 Release 的权限
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # -----------------------------
-    # 1. 缓存 dl/（下载包缓存）
-    # -----------------------------
     - name: Cache dl
       uses: actions/cache@v4
       with:
         path: dl
         key: dl-cache
 
-    # -----------------------------
-    # 2. 缓存 ccache（编译缓存）
-    # -----------------------------
     - name: Cache ccache
       uses: actions/cache@v4
       with:
@@ -30,9 +25,6 @@ jobs:
         key: ccache-${{ runner.os }}
         restore-keys: ccache-
 
-    # -----------------------------
-    # 3. 缓存 host tools（大幅减少 host 构建时间）
-    # -----------------------------
     - name: Cache host tools
       uses: actions/cache@v4
       with:
@@ -46,7 +38,6 @@ jobs:
         gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
         python3-setuptools rsync unzip zlib1g-dev file wget ccache
 
-    # 启用 ccache
     - name: Enable ccache
       run: |
         echo 'export PATH="/usr/lib/ccache:$PATH"' >> $GITHUB_ENV
@@ -67,6 +58,11 @@ jobs:
         echo "CONFIG_TARGET_qualcommax=y" >> .config
         echo "CONFIG_TARGET_qualcommax_ipq50xx=y" >> .config
         echo "CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_cmcc_rax3000q=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-nikki=y" >> .config
+        echo "CONFIG_PACKAGE_luci-i18n-nikki-zh-cn=y" >> .config
+        echo "CONFIG_PACKAGE_rtp2httpd=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-rtp2httpd=y" >> .config
+        echo "CONFIG_PACKAGE_luci-i18n-rtp2httpd-zh-cn=y" >> .config
         make defconfig
 
     - name: Build firmware
@@ -78,3 +74,16 @@ jobs:
       with:
         name: rax3000q-firmware
         path: bin/targets/
+
+    # ===== 新增：编译完自动发布到 GitHub Release =====
+    - name: Publish to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: rax3000q-${{ github.run_id }}
+        name: RAX3000Q Firmware (build ${{ github.run_id }})
+        body: |
+          OpenWrt 25.12 (kernel 6.12) CMCC RAX3000Q 自编译固件
+          已内置 nikki + rtp2httpd
+        files: bin/targets/qualcommax/ipq50xx/*
+        draft: false
+        prerelease: false
